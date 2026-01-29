@@ -1,16 +1,19 @@
 import React, { useMemo, useState } from "react";
-import { Box, Table, TableContainer, Paper, Pagination } from "@mui/material";
+import { Box, Table, TableContainer, Paper, Button, Typography } from "@mui/material";
+import { ChevronLeft, ChevronRight } from "@mui/icons-material";
 import GLTableHead from "./GLTableHead";
 import GLTableBody from "./GLTableBody";
 import LedgerLoading from "./LedgerLoading";
+import { AE_GET_GL_COLUMNS, AE_UPLOAD_EXCEL_COLUMNS, AE_VALIDATE_COLUMNS, AE_ERROR_COLUMNS } from "./columnConfig";
 
 const GLTable = ({
   data = [],
-  columns = [],
+  tableType = "gl", // "gl", "upload", "validate", "error"
   loading = false,
   currentPage = 1,
-  totalPages = 0,
-  onPageChange,
+  hasNextPage = false,
+  onNextPage,
+  onPrevPage,
   rowTextColor = "default",
 }) => {
   const [sortConfig, setSortConfig] = useState({
@@ -19,28 +22,38 @@ const GLTable = ({
   });
 
   /* ---------------- COLUMNS ---------------- */
-  const finalColumns = useMemo(() => {
-    if (columns.length > 0) return columns;
+  const columns = useMemo(() => {
+    switch (tableType) {
+      case "upload":
+        return AE_UPLOAD_EXCEL_COLUMNS;
+      case "validate":
+        return AE_VALIDATE_COLUMNS;
+      case "error":
+        return AE_ERROR_COLUMNS;
+      default:
+        return AE_GET_GL_COLUMNS;
+    }
+  }, [tableType]);
+
+  /* ---------------- TRANSFORM DATA ---------------- */
+  const transformedData = useMemo(() => {
     if (!data.length) return [];
-
-    const keys = new Set();
-    data.forEach((row) =>
-      Object.keys(row).forEach((key) => keys.add(key))
-    );
-
-    return Array.from(keys).map((key) => ({
-      key,
-      label:
-        key.charAt(0).toUpperCase() +
-        key.slice(1).replace(/([A-Z])/g, " $1"),
-    }));
+    
+    return data.map(row => {
+      const transformedRow = {};
+      columns.forEach(col => {
+        const value = row[col.apiField];
+        transformedRow[col.key] = value === null || value === undefined ? "-" : value;
+      });
+      return transformedRow;
+    });
   }, [data, columns]);
 
   /* ---------------- SORT ---------------- */
   const sortedData = useMemo(() => {
-    if (!sortConfig.key) return data;
+    if (!sortConfig.key) return transformedData;
 
-    return [...data].sort((a, b) => {
+    return [...transformedData].sort((a, b) => {
       const aVal = a[sortConfig.key];
       const bVal = b[sortConfig.key];
 
@@ -48,12 +61,16 @@ const GLTable = ({
       if (aVal > bVal) return sortConfig.direction === "asc" ? 1 : -1;
       return 0;
     });
-  }, [data, sortConfig]);
+  }, [transformedData, sortConfig]);
 
   if (loading) return <LedgerLoading />;
 
-  if (!data || data.length === 0) {
-    return <div>No data provided</div>;
+  if (!transformedData || transformedData.length === 0) {
+    return (
+      <Box sx={{ p: 4, textAlign: "center", color: "#6b7280" }}>
+        No data available
+      </Box>
+    );
   }
 
   return (
@@ -61,7 +78,7 @@ const GLTable = ({
       <TableContainer component={Paper} sx={{ flex: 1, overflow: "auto" }}>
         <Table stickyHeader size="small">
           <GLTableHead
-            columns={finalColumns}
+            columns={columns}
             sortConfig={sortConfig}
             onSort={(key) =>
               setSortConfig({
@@ -76,23 +93,37 @@ const GLTable = ({
 
           <GLTableBody
             rows={sortedData}
-            columns={finalColumns}
+            columns={columns}
             rowTextColor={rowTextColor}
           />
         </Table>
       </TableContainer>
 
-      {totalPages >= 1 && data.length > 10 && (
-        <Box sx={{ display: "flex", justifyContent: "end", alignItems:"center", gap:2, p: 3,pt:1,mt:0 }}>
-          <Pagination
-            count={totalPages}
-            page={currentPage}
-            onChange={(_, page) => onPageChange(page)}
-            disabled={loading}
-            color="primary"
-            showFirstButton={totalPages > 5}
-            showLastButton={totalPages > 5}
-          />
+      {transformedData.length > 0 && (
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", p: 2, pt:0 }}>
+          <Button
+            startIcon={<ChevronLeft />}
+            onClick={onPrevPage}
+            disabled={loading || currentPage === 1}
+            variant="outlined"
+            size="small"
+          >
+            Previous
+          </Button>
+          
+          <Typography variant="body2" color="text.secondary">
+            Page {currentPage}
+          </Typography>
+          
+          <Button
+            endIcon={<ChevronRight />}
+            onClick={onNextPage}
+            disabled={loading || !hasNextPage}
+            variant="outlined"
+            size="small"
+          >
+            Next
+          </Button>
         </Box>
       )}
       

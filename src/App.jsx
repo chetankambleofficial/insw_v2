@@ -5,6 +5,7 @@ import FleetListPage from "./pages/FleetlistPage";
 import AeGLTablePage from "./pages/AeGLTablePage";
 import VshipsGLTablePage from "./pages/VshipsGLTablePage";
 import { HeaderSection } from "./components/HeaderSection/HeaderSection";
+import ComingSoon from "./pages/ComingSoon";
 
 function App() {
   const [activeMenu, setActiveMenu] = useState(null);
@@ -12,7 +13,7 @@ function App() {
 
   // Called when a card is clicked
   const handleCardClick = (path) => {
-    setActiveMenu(path); // header shows active menu only after clicking
+    setActiveMenu(path);// header shows active menu only after clicking
     navigate(path);
   };
 
@@ -32,7 +33,7 @@ function App() {
           element={<Dashboard onCardClick={handleCardClick} />}
         />
         <Route path="/insw-vessels" element={<FleetListPage />} />
-
+        <Route path="/*" element={<ComingSoon/>}/>
         <Route path="/AETMS/general-ledger" element={<AeGLTablePage/>} />
         <Route path="/V.Ships/general-ledger" element={<VshipsGLTablePage/>} />
       </Routes>

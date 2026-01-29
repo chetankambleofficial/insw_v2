@@ -1,25 +1,27 @@
-// GLTable.jsx
 import React, { useMemo, useState } from "react";
 import {
   Box,
   Table,
   TableContainer,
   Paper,
-  Pagination,
+  Button,
+  Typography,
 } from "@mui/material";
+import { ChevronLeft, ChevronRight } from "@mui/icons-material";
 
 import GLTableHead from "./GLTableHead";
 import GLTableBody from "./GLTableBody";
 import LedgerLoading from "./LedgerLoading";
-import { COLUMN_SETS, DEFAULT_COLUMNS } from "./columnConfig";
+import { VSHIPS_GL_COLUMNS, VSHIPS_VALIDATE_COLUMNS, VSHIPS_ERROR_COLUMNS } from "./columnConfig";
 
 const GLTable = ({
   data = [],
-  columnSet = "ALL",
+  tableType = "gl", // "gl", "validate", "error"
   loading = false,
   currentPage = 1,
-  totalPages = 0,
-  onPageChange = () => {},
+  hasNextPage = false,
+  onNextPage,
+  onPrevPage,
   rowTextColor = "default",
 }) => {
   const [sortConfig, setSortConfig] = useState({
@@ -28,13 +30,33 @@ const GLTable = ({
   });
 
   const columns = useMemo(() => {
-    return COLUMN_SETS[columnSet] || DEFAULT_COLUMNS;
-  }, [columnSet]);
+    switch (tableType) {
+      case "validate":
+        return VSHIPS_VALIDATE_COLUMNS;
+      case "error":
+        return VSHIPS_ERROR_COLUMNS;
+      default:
+        return VSHIPS_GL_COLUMNS;
+    }
+  }, [tableType]);
+
+  const transformedData = useMemo(() => {
+    if (!data.length) return [];
+    
+    return data.map(row => {
+      const transformedRow = {};
+      columns.forEach(col => {
+        const value = row[col.apiField];
+        transformedRow[col.key] = value === null || value === undefined ? "-" : value;
+      });
+      return transformedRow;
+    });
+  }, [data, columns]);
 
   const sortedData = useMemo(() => {
-    if (!sortConfig.key) return data;
+    if (!sortConfig.key) return transformedData;
 
-    return [...data].sort((a, b) => {
+    return [...transformedData].sort((a, b) => {
       const aVal = a[sortConfig.key] ?? "";
       const bVal = b[sortConfig.key] ?? "";
 
@@ -48,11 +70,11 @@ const GLTable = ({
         ? String(aVal).localeCompare(String(bVal))
         : String(bVal).localeCompare(String(aVal));
     });
-  }, [data, sortConfig]);
+  }, [transformedData, sortConfig]);
 
   if (loading) return <LedgerLoading />;
 
-  if (!data.length) return <Box p={2}>No data available</Box>;
+  if (!transformedData.length) return <Box p={2}>No data available</Box>;
 
   return (
     <Box sx={{ height: "80vh", display: "flex", flexDirection: "column" }}>
@@ -79,14 +101,31 @@ const GLTable = ({
         </Table>
       </TableContainer>
 
-      {totalPages > 1 && (
-        <Box sx={{ p: 2, display: "flex", justifyContent: "center" }}>
-          <Pagination
-            count={totalPages}
-            page={currentPage}
-            onChange={(_, page) => onPageChange(page)}
-            color="primary"
-          />
+      {transformedData.length > 0 && (
+        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", p: 2, pt:0 }}>
+          <Button
+            startIcon={<ChevronLeft />}
+            onClick={onPrevPage}
+            disabled={loading || currentPage === 1}
+            variant="outlined"
+            size="small"
+          >
+            Previous
+          </Button>
+          
+          <Typography variant="body2" color="text.secondary">
+            Page {currentPage}
+          </Typography>
+          
+          <Button
+            endIcon={<ChevronRight />}
+            onClick={onNextPage}
+            disabled={loading || !hasNextPage}
+            variant="outlined"
+            size="small"
+          >
+            Next
+          </Button>
         </Box>
       )}
     </Box>

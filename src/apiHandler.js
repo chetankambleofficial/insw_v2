@@ -2,7 +2,7 @@
 import axios from "axios";
 
 const BASE_URL = "http://localhost:8055/api";
-
+// const BASE_URL="http://192.168.1.70:8080/api";
 /* ---------------- AXIOS INSTANCE ---------------- */
 const apiClient = axios.create({
   baseURL: BASE_URL,
@@ -26,10 +26,27 @@ export const doGet = async (url, params = {}) => {
 /* ---------------- COMMON POST ---------------- */
 export const doPost = async (url, data = {}, config = {}) => {
   try {
-    const response = await apiClient.post(url, data, config);
+    const response = await apiClient.post(url, data, {
+      timeout: 600000, // 10 minutes for data-heavy operations
+      ...config
+    });
     return response.data;
   } catch (error) {
     console.error("POST Error:", error);
+    throw error?.response?.data || error;
+  }
+};
+
+/* ---------------- COMMON PUT ---------------- */
+export const doPut = async (url, data = {}, config = {}) => {
+  try {
+    const response = await apiClient.put(url, data, {
+      timeout: 600000, // 10 minutes for data-heavy operations
+      ...config
+    });
+    return response.data;
+  } catch (error) {
+    console.error("PUT Error:", error);
     throw error?.response?.data || error;
   }
 };
@@ -41,6 +58,7 @@ export const doPostForm = async (url, formData) => {
       headers: {
         "Content-Type": "multipart/form-data",
       },
+      timeout: 120000, // 2 minutes for file uploads
     });
     return response.data;
   } catch (error) {

@@ -1,6 +1,21 @@
 import React from "react";
 import { TableRow, TableCell, Tooltip } from "@mui/material";
 
+const formatDateToMMYY = (dateValue) => {
+  if (!dateValue || dateValue === "-") return dateValue;
+  
+  try {
+    const date = new Date(dateValue);
+    if (isNaN(date.getTime())) return dateValue;
+    
+    const month = date.toLocaleString('default', { month: 'short' }).toUpperCase();
+    const year = date.getFullYear().toString().slice(-2);
+    return `${month}-${year}`;
+  } catch {
+    return dateValue;
+  }
+};
+
 const GLTableRow = ({ row, columns, rowTextColor = "default" }) => {
   const isError = rowTextColor === "error";
   console.log("GLTableRow rowTextColor:", rowTextColor, "isError:", isError);
@@ -21,7 +36,11 @@ const GLTableRow = ({ row, columns, rowTextColor = "default" }) => {
     >
       {columns.map((column) => {
         const cellValue = row[column.key] ?? "";
-        const displayValue = String(cellValue).substring(0, 10);
+        
+        // Format date fields
+        const isDateField = column.key.includes('Date') || column.key.includes('date') || column.key === 'period';
+        const formattedValue = isDateField ? formatDateToMMYY(cellValue) : cellValue;
+        const displayValue = String(formattedValue).substring(0, 10);
 
         return (
           <TableCell
@@ -36,7 +55,7 @@ const GLTableRow = ({ row, columns, rowTextColor = "default" }) => {
               cursor: "pointer",
             }}
           >
-            <Tooltip title={cellValue} placement="top">
+            <Tooltip title={formattedValue} placement="top">
               <span>{displayValue}</span>
             </Tooltip>
           </TableCell>

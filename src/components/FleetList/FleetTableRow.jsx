@@ -30,7 +30,7 @@ export const FleetTableRow = ({
         const value = vessel[col.key];
         const editable = isEditing && col.editable;
 
-        if (col.key === "activeStatus") {
+        if (col.key === "status") {
           return <TableCell key={col.key} align="center">{renderStatus(value)}</TableCell>;
         }
 
@@ -43,8 +43,15 @@ export const FleetTableRow = ({
             <TableCell key={col.key}>
               <TextField
                 size="small"
-                value={editValues[col.key] || ""}
-                onChange={e => onChange(col.key, e.target.value)}
+                value={editValues[col.key === "inswShipId" ? "shipNumber" : 
+                                col.key === "inswAcctCompanyId" ? "acctCompanyId" : 
+                                col.key === "aetmsVshipShipCode" ? "aetmsVshipShipId" : col.key] || ""}
+                onChange={e => onChange(
+                  col.key === "inswShipId" ? "shipNumber" : 
+                  col.key === "inswAcctCompanyId" ? "acctCompanyId" : 
+                  col.key === "aetmsVshipShipCode" ? "aetmsVshipShipId" : col.key, 
+                  e.target.value
+                )}
               />
             </TableCell>
           );

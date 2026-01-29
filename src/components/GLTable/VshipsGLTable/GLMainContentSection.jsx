@@ -191,7 +191,7 @@ const GLMainContentSection = ({
                   size="small"
                   checked={showErrorsOnly}
                   onChange={(e) => setShowErrorsOnly(e.target.checked)}
-                  disabled={!hasErrors || loading}
+                  disabled={loading}
                 />
               }
               label="Errors"

@@ -6,9 +6,11 @@ import "./Dashboard.css";
 import Cards from "./CardsList";
 import Hero from "./Hero";
 import { HeaderSection } from "../HeaderSection/HeaderSection";
+import LoadingScreen from "../common/LoadingScreen";
 
 const Dashboard = () => {
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("");
   const navigate = useNavigate();
 
   // Active card index for auto-scroll functionality
@@ -20,17 +22,17 @@ const Dashboard = () => {
   const resumeTimer = useRef(null);
 
   /**
-   * Handle manager card click and navigation with loading state
+   * Handle manager card click and navigation
    * @param {string} section - Management section to navigate to
    * @param {string} page - Page type (default: "vessel")
    */
   const handleCardClick = (section, page = "general-ledger") => {
     setLoading(true);
-    // Simulate loading time for better UX
+    setLoadingMessage("Loading page...");
     setTimeout(() => {
       setLoading(false);
       navigate(`/${section}/${page}`);
-    }, 1000);
+    }, 800);
   };
 
   /**
@@ -83,41 +85,6 @@ const Dashboard = () => {
 
   return (
     <>
-      {/* Loading overlay with maritime-themed animation */}
-      {loading && (
-        <Box
-          sx={{
-            position: "fixed",
-            inset: 0,
-            bgcolor: "rgba(0,0,0,0.85)",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 9999,
-          }}
-        >
-          <Box sx={{ display: "flex", gap: 2 }}>
-            <Box className="ship-dot" />
-            <Box className="ship-dot" />
-            <Box className="ship-dot" />
-          </Box>
-
-          <Typography
-            sx={{
-              color: "#fff",
-              mt: 3,
-              fontFamily: "Fjalla One",
-              fontSize: "1.1rem",
-            }}
-          >
-            Loading Please Wait...
-          </Typography>
-        </Box>
-      )}
-
-
-
       {/* Main dashboard section with background */}
       <section className="dashboard-section">
         <div className="background-image" />
@@ -141,6 +108,8 @@ const Dashboard = () => {
           </Box>
         </div>
       </section>
+
+      <LoadingScreen open={loading} message={loadingMessage} />
     </>
   );
 };

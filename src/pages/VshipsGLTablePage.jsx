@@ -1,19 +1,20 @@
 import React, { useState, useEffect } from "react";
 import { Box, Snackbar, Alert } from "@mui/material";
 
-import GLFilterSection from "../components/GLTable/AeGLTable/GLFilterSection";
-import GLMainContentSection from "../components/GLTable/AeGLTable/GLMainContentSection";
-import GLTable from "../components/GLTable/AeGLTable/GLTable";
+import GLFilterSection from "../components/GLTable/VshipsGLTable/GLFilterSection";
+import GLMainContentSection from "../components/GLTable/VshipsGLTable/GLMainContentSection";
+import GLTable from "../components/GLTable/VshipsGLTable/GLTable";
+import LoadingScreen from "../components/common/LoadingScreen";
 
 import {
-  loadVshipsTransactions,
-  uploadVshipsExcel,
-  generateVshipsGl,
+  LoadVshipsGl,
   validateVshipsGl,
   getVshipsUploadSummary,
+  getVshipsErrors,
+  postVshipsGl,
 } from "../components/GLTable/VshipsGLTable/VshipsGlapi";
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 15;
 
 function VshipsGLTablePage() {
   /* ================= SEARCH ================= */
@@ -26,7 +27,7 @@ function VshipsGLTablePage() {
     post: false,
   });
 
-  /* ================= FILTERS (START EMPTY ✅) ================= */
+  /* ================= FILTERS ================= */
   const [filters, setFilters] = useState({
     month: "",
     year: "",
@@ -42,14 +43,14 @@ function VshipsGLTablePage() {
   const [errorData, setErrorData] = useState([]);
 
   /* ================= PAGINATION ================= */
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(0);
-  const [totalRecords, setTotalRecords] = useState(0);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [hasNextPage, setHasNextPage] = useState(true);
 
   /* ================= UI STATE ================= */
   const [showErrorsOnly, setShowErrorsOnly] = useState(false);
   const [uploadSummary, setUploadSummary] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("");
 
   /* ================= TOAST ================= */
   const [toast, setToast] = useState({
@@ -62,7 +63,7 @@ function VshipsGLTablePage() {
     setToast({ open: true, message, severity });
   };
 
-  /* ================= RESET WHEN PERIOD CHANGES ================= */
+  /* ================= RESET ON PERIOD CHANGE ================= */
   useEffect(() => {
     setWorkflow({ load: false, generate: false, post: false });
     setData([]);
@@ -71,62 +72,123 @@ function VshipsGLTablePage() {
     setUploadSummary(null);
     setShowErrorsOnly(false);
     setExcelFile(null);
-
-    setCurrentPage(1);
-    setTotalPages(0);
-    setTotalRecords(0);
+    setCurrentPage(0);
+    setHasNextPage(true);
   }, [filters.month, filters.year]);
 
-  /* ================= LOAD ================= */
+  /* ================= LOAD (EXCEL) ================= */
   const handleLoad = async (file) => {
     if (!file) {
-      showToast("Excel file is mandatory", "error");
+      showToast("Excel file is mandatory");
       return;
     }
 
     setLoading(true);
+    setLoadingMessage("Loading VShips data...");
     try {
-      const response = await uploadVshipsExcel({
+      const response = await LoadVshipsGl({
         ...filters,
         file,
+        page: 0,
+        size: PAGE_SIZE,
       });
 
-      const result = response.ledgers || response.data || [];
-      const total = response.totalRecords || response.total || result.length;
+      const result = response.ledgers || response.data || response.content || [];
 
       setData(result);
-      setCurrentPage(1);
-      setTotalRecords(total);
-      setTotalPages(Math.max(1, Math.ceil(total / PAGE_SIZE)));
+      setCurrentPage(0);
+      setHasNextPage(result.length === PAGE_SIZE);
 
       setWorkflow({ load: true, generate: false, post: false });
     } catch (err) {
       console.error("Load failed:", err);
-      showToast("Load failed", "error");
+      showToast("Load failed");
     } finally {
       setLoading(false);
     }
   };
 
-  /* ================= PAGE CHANGE ================= */
-  const handlePageChange = async (newPage) => {
-    if (loading || workflow.generate) {
-      setCurrentPage(newPage);
-      return;
-    }
+  /* ================= PAGINATION ================= */
+  const handleNextPage = async () => {
+    if (!hasNextPage || loading) return;
 
     setLoading(true);
+    setLoadingMessage("Loading next page...");
     try {
-      const res = await loadVshipsTransactions({
-        ...filters,
-        page: newPage - 1,
-        size: PAGE_SIZE,
-      });
+      const nextPage = currentPage + 1;
+      const periodName = `${new Date(0, filters.month - 1)
+        .toLocaleString("default", { month: "short" })
+        .toUpperCase()}-${String(filters.year).slice(-2)}`;
 
-      setData(res.ledgers || []);
-      setCurrentPage(newPage);
+      let res, result;
+      
+      if (workflow.generate) {
+        if (showErrorsOnly) {
+          return; // No pagination for errors
+        } else {
+          res = await validateVshipsGl({ periodName, page: nextPage, size: PAGE_SIZE });
+          result = Array.isArray(res) ? res : res.data || res.content || res.ledgers || [];
+        }
+      } else {
+        res = await LoadVshipsGl({
+          ...filters,
+          file: excelFile,
+          page: nextPage,
+          size: PAGE_SIZE,
+        });
+        result = res.ledgers || res.data || res.content || [];
+      }
+
+      if (result.length === 0) {
+        setHasNextPage(false);
+        return;
+      }
+
+      setData(result);
+      setCurrentPage(nextPage);
+      setHasNextPage(result.length === PAGE_SIZE);
     } catch (err) {
-      console.error("Pagination failed:", err);
+      console.error("Next page failed:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePrevPage = async () => {
+    if (currentPage === 0 || loading) return;
+
+    setLoading(true);
+    setLoadingMessage("Loading previous page...");
+    try {
+      const prevPage = currentPage - 1;
+      const periodName = `${new Date(0, filters.month - 1)
+        .toLocaleString("default", { month: "short" })
+        .toUpperCase()}-${String(filters.year).slice(-2)}`;
+
+      let res, result;
+      
+      if (workflow.generate) {
+        if (showErrorsOnly) {
+          return; // No pagination for errors
+        } else {
+          res = await validateVshipsGl({ periodName, page: prevPage, size: PAGE_SIZE });
+          result = Array.isArray(res) ? res : res.data || res.content || res.ledgers || [];
+        }
+      } else {
+        res = await LoadVshipsGl({
+          ...filters,
+          file: excelFile,
+          page: prevPage,
+          size: PAGE_SIZE,
+        });
+        result = res.ledgers || res.data || res.content || [];
+      }
+
+      setData(result);
+      setCurrentPage(prevPage);
+      setHasNextPage(true);
+    } catch (err) {
+      console.error("Previous page failed:", err);
     } finally {
       setLoading(false);
     }
@@ -135,35 +197,46 @@ function VshipsGLTablePage() {
   /* ================= GENERATE ================= */
   const handleGenerate = async () => {
     setLoading(true);
+    setLoadingMessage("Generating VShips GL entries...");
     try {
-      const periodName = `${new Date(0, filters.month - 1)
+      const monthName = new Date(0, filters.month - 1)
         .toLocaleString("default", { month: "short" })
-        .toUpperCase()}-${filters.year}`;
+        .toUpperCase();
 
-      const genRes = await generateVshipsGl(filters);
-      const generatedData = genRes.data || [];
-      setNormalData(generatedData);
+      const yearShort = String(filters.year).slice(-2);
+      const periodName = `${monthName}-${yearShort}`;
 
-      const valRes = await validateVshipsGl({ periodName });
-      const errors = Array.isArray(valRes) ? valRes : valRes.data || [];
-      setErrorData(errors);
+      // 1️⃣ Validate / Generate (get normal data)
+      const normalResponse = await validateVshipsGl({ periodName });
+      console.log('Normal response:', normalResponse);
+      const normal = Array.isArray(normalResponse) ? normalResponse : 
+                    normalResponse.data || normalResponse.content || normalResponse.ledgers || [];
+      setNormalData(normal);
 
+      // 2️⃣ Upload summary
       const summary = await getVshipsUploadSummary({ periodName });
       setUploadSummary(summary);
 
+      // 3️⃣ Get errors
+      const errorResponse = await getVshipsErrors({ periodName });
+      console.log('Error response:', errorResponse);
+      const errors = Array.isArray(errorResponse) ? errorResponse : 
+                    errorResponse.data || errorResponse.content || errorResponse.ledgers || [];
+      setErrorData(errors);
+
+      // 4️⃣ Set initial display based on error count
       if (errors.length > 0) {
         setData(errors);
         setShowErrorsOnly(true);
-        showToast("Can’t post, it has errors", "error");
       } else {
-        setData(generatedData);
+        setData(normal);
         setShowErrorsOnly(false);
       }
 
       setWorkflow({ load: true, generate: true, post: false });
     } catch (err) {
       console.error("Generate failed:", err);
-      showToast("Generate failed", "error");
+      showToast("Generate failed");
     } finally {
       setLoading(false);
     }
@@ -172,23 +245,32 @@ function VshipsGLTablePage() {
   /* ================= ERROR TOGGLE ================= */
   const handleErrorToggle = (showErrors) => {
     setShowErrorsOnly(showErrors);
-    setData(showErrors ? errorData : normalData);
+    setCurrentPage(0);
+    setHasNextPage(true);
+    if (showErrors) {
+      // Show errors - use errorData
+      setData(errorData);
+    } else {
+      // Show normal data - use normalData
+      setData(normalData);
+    }
   };
 
   /* ================= POST ================= */
   const handlePost = async () => {
     if (errorData.length > 0) {
-      showToast("Can’t post, it has errors", "error");
+      showToast("Can’t post, it has errors");
       return;
     }
 
     setLoading(true);
+    setLoadingMessage("Posting VShips transactions...");
     try {
-      await generateVshipsGl(filters);
+      await postVshipsGl(filters);
       setWorkflow({ load: true, generate: true, post: true });
       showToast("Posted successfully", "success");
     } catch (err) {
-      showToast("Post failed", "error");
+      showToast("Post failed");
     } finally {
       setLoading(false);
     }
@@ -209,11 +291,11 @@ function VshipsGLTablePage() {
     workflow.load ? (
       <GLTable
         data={data}
-        columns={getColumns()}
-        loading={loading}
-        currentPage={currentPage}
-        totalPages={totalPages}
-        onPageChange={handlePageChange}
+        tableType={showErrorsOnly ? "error" : workflow.generate ? "validate" : "gl"}
+        currentPage={currentPage + 1}
+        hasNextPage={hasNextPage}
+        onNextPage={handleNextPage}
+        onPrevPage={handlePrevPage}
         rowTextColor={showErrorsOnly ? "error" : "default"}
       />
     ) : (
@@ -247,9 +329,7 @@ function VshipsGLTablePage() {
           uploadSummary={uploadSummary}
         />
 
-        <Box sx={{ flex: 1, overflow: "hidden" }}>
-          {renderTable()}
-        </Box>
+        <Box sx={{ flex: 1, overflow: "hidden" }}>{renderTable()}</Box>
       </Box>
 
       {/* ================= TOAST ================= */}
@@ -263,6 +343,8 @@ function VshipsGLTablePage() {
           {toast.message}
         </Alert>
       </Snackbar>
+
+      <LoadingScreen open={loading} message={loadingMessage} />
     </Box>
   );
 }
